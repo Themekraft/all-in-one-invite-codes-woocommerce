@@ -4,11 +4,12 @@
  * Plugin Name: All in One Invite Codes WooCommerce
  * Plugin URI: https://themekraft.com/products/all-in-one-invite-codes-woocommerce/
  * Description: Create Invite only Products with WooCommerce
- * Version: 1.0.4
+ * Version: 1.0.5
  * Author: ThemeKraft
  * Author URI: https://themekraft.com/
  * Licence: GPLv3
  * Network: false
+ * WC tested up to: 11.1
  * Text Domain: all-in-one-invite-codes-woocommerce
  * Domain Path: /languages
  *
@@ -31,6 +32,14 @@
  ****************************************************************************
  */
 
+add_action(
+	'before_woocommerce_init',
+	function () {
+		if ( class_exists( \Automattic\WooCommerce\Utilities\FeaturesUtil::class ) ) {
+			\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', __FILE__, true );
+		}
+	}
+);
 
 function aioic_woocommerce_load_plugin_textdomain()
 {
@@ -250,6 +259,93 @@ function all_in_one_invite_codes_checkout_field($checkout)
 	}
 }
 
+add_action( 'all_in_one_invite_codes_add_general_settings_option', 'all_in_one_invite_codes_woo_registration_form_settings', );
+function all_in_one_invite_codes_woo_registration_form_settings( $options ){
+	?>
+	<tr valign="top">
+		<th scope="row" valign="top">
+			<?php esc_html_e( 'Add Invite code field to WooCommerce registration form', 'all-in-one-invite-codes' ); ?>
+		</th>
+		<td>
+			<select name="all_in_one_invite_codes_general[woo_registration]" id="all_in_one_invite_codes_general_woo">
+				<?php $selected = (isset( $options['woo_registration'] ) && $options['woo_registration'] === 'disabled') ? 'selected' : '' ; ?>
+				<option value="disabled" <?php echo $selected; ?>>Disable</option>
+				<?php $selected = (isset( $options['woo_registration'] ) && $options['woo_registration'] === 'enabled') ? 'selected' : '' ; ?>
+				<option value="enabled" <?php echo $selected; ?>>Enable</option>
+        	</select>
+		</td>
+	</tr>
+
+	<?php
+}
+
+add_action( 'woocommerce_register_form', 'all_in_one_invite_codes_edit_woo_form', 15 );
+function all_in_one_invite_codes_add_invite_field_woo() {
+	$general_settings = get_option( 'all_in_one_invite_codes_general' );
+	if( ! empty( $general_settings ) && isset( $general_settings['woo_registration'] ) && 'enabled' === $general_settings['woo_registration'] ){
+		return apply_filters( 'woocommerce_forms_field', array(
+			'invite_code' => array(
+				'type'        => 'text',
+				'label'       => __( 'Invite code', 'all-in-one-invite-codes-woocommerce' ),
+				'placeholder' => __( 'Please enter a valid code', 'all-in-one-invite-codes-woocommerce' ),
+				'required'    => true,
+			),
+		) );
+	}
+}
+function all_in_one_invite_codes_edit_woo_form() {
+	$general_settings = get_option( 'all_in_one_invite_codes_general' );
+	if( ! empty( $general_settings ) && isset( $general_settings['woo_registration'] ) && 'enabled' === $general_settings['woo_registration'] ){
+		$fields = all_in_one_invite_codes_add_invite_field_woo();
+		foreach ( $fields as $key => $field_args ) {
+			woocommerce_form_field( $key, $field_args );
+		}
+	}
+}
+
+add_action('woocommerce_register_post', 'all_in_one_invite_codes_woo_validate_invite_field', 10, 3);
+function all_in_one_invite_codes_woo_validate_invite_field( $username, $email, $validation_errors ) {
+    if ( isset( $_POST['invite_code'] ) && empty( $_POST['invite_code'] ) ) {
+        $validation_errors->add( 'invite_code_error', __( '<strong>Error</strong>: Invite code is required!', 'all-in-one-invite-codes-woocommerce' ) );
+    }
+
+	$is_valid_code = all_in_one_invite_codes_validate_code( $_POST['invite_code'], $_POST['email'], 'any' );
+
+	if( is_array( $is_valid_code ) && isset( $is_valid_code['error'] ) ){
+		$validation_errors->add( 'invite_code_error', __( $is_valid_code['error'], 'all-in-one-invite-codes-woocommerce' ) );
+	}
+
+    return $validation_errors;
+}
+
+add_action('woocommerce_created_customer', 'all_in_one_invite_update_code_woo_registration_form', 10, 3);
+function all_in_one_invite_update_code_woo_registration_form( $customer_id, $new_customer_data, $password_generated  ){
+	
+	if( isset( $_POST['invite_code'] ) ){
+		$args  = array(
+			'post_type'  => 'tk_invite_codes',
+			'meta_query' => array(
+				array(
+					'key'     => 'tk_all_in_one_invite_code',
+					'value'   => $_POST['invite_code'],
+					'compare' => '=',
+				),
+			),
+		);
+		$query = new WP_Query( $args );
+	
+		// Get the invite code id
+		if ( $query->have_posts() ) {
+			while ( $query->have_posts() ) :
+				$query->the_post();
+				$post_parent_post_id = get_the_ID();
+			endwhile;
+		}
+		update_post_meta( $post_parent_post_id, 'tk_all_in_one_invite_code_status', 'Used' );
+	}
+
+}
+
 /**
  * Check if Conditional Product is In cart
  *
@@ -266,7 +362,7 @@ function all_in_one_invite_is_conditional_product_in_cart($product_id)
 	foreach ($woocommerce->cart->get_cart() as $cart_item_key => $values) {
 		$_product = $values['data'];
 
-		if ($_product->id === $product_id) {
+		if ($_product->get_id() === $product_id) {
 			$invite_only_in_cart = true;
 		}
 	}
@@ -280,8 +376,12 @@ function all_in_one_invite_is_conditional_product_in_cart($product_id)
 add_action('woocommerce_checkout_update_order_meta', 'all_in_one_invite_codes_checkout_field_update_order_meta');
 function all_in_one_invite_codes_checkout_field_update_order_meta($order_id)
 {
-	if ($_POST['all_in_one_invite_codes_woo_product']) {
-		update_post_meta($order_id, 'all_in_one_invite_codes_woo_product', esc_attr($_POST['all_in_one_invite_codes_woo_product']));
+	if (!empty($_POST['all_in_one_invite_codes_woo_product'])) {
+		$order = wc_get_order($order_id);
+		if ($order) {
+			$order->update_meta_data('all_in_one_invite_codes_woo_product', sanitize_text_field(wp_unslash($_POST['all_in_one_invite_codes_woo_product'])));
+			$order->save();
+		}
 	}
 }
 
@@ -291,42 +391,8 @@ function all_in_one_invite_codes_checkout_field_update_order_meta($order_id)
 add_filter('woocommerce_email_order_meta_keys', 'all_in_one_invite_codes_order_mail_meta_keys');
 function all_in_one_invite_codes_order_mail_meta_keys($keys)
 {
-
-
-	if (!is_checkout()) {
-		return;
-	}
-
-	$products = new WP_Query(array(
-		'post_type'      => array('product'),
-		'post_status'    => 'publish',
-		'posts_per_page' => -1,
-		'meta_query'     => array(
-			array(
-				'key' => 'invite_only',
-			)
-		),
-	));
-
-	if ($products->have_posts()) : while ($products->have_posts()) :
-			$products->the_post();
-			$product_ids[] = $products->post->ID;
-		endwhile;
-		wp_reset_postdata();
-	endif;
-
-	$invite_only_in_cart = false;
-	if ($product_ids) {
-		foreach ($product_ids as $product_id) {
-			if (all_in_one_invite_is_conditional_product_in_cart($product_id)) {
-				$invite_only_in_cart = true;
-			}
-		}
-	}
-
-	if ($invite_only_in_cart === true) {
-		$keys['Invite Code'] = 'all_in_one_invite_codes_woo_product';
-	}
+	// WooCommerce reads the value from the order and skips orders without it.
+	$keys['Invite Code'] = 'all_in_one_invite_codes_woo_product';
 
 	return $keys;
 }
@@ -365,14 +431,20 @@ function all_in_one_invite_code_woo_payment_complete($order_id)
 {
 
 
-	$order   = wc_get_order($order_id);
-	$user    = $order->get_user();
-	$user_id = $user->ID;
+	$order = wc_get_order($order_id);
+	if (!$order) {
+		return;
+	}
+	$user = $order->get_user();
 	if ($user) {
-		$code = get_post_meta($order_id, 'all_in_one_invite_codes_woo_product', true);
+		$user_id = $user->ID;
+		$code    = trim((string) $order->get_meta('all_in_one_invite_codes_woo_product', true));
+		if ('' === $code) {
+			return;
+		}
 
-		$tk_invite_code[] = sanitize_text_field($_POST['tk_invite_code']);
-		update_user_meta($user_id, 'tk_all_in_one_invite_code', $tk_invite_code);
+		// Remember the code the customer used at checkout.
+		update_user_meta($user_id, 'tk_all_in_one_invite_code', $code);
 
 		// Get the invite code
 		$args  = array(
@@ -380,7 +452,7 @@ function all_in_one_invite_code_woo_payment_complete($order_id)
 			'meta_query' => array(
 				array(
 					'key'     => 'tk_all_in_one_invite_code',
-					'value'   => trim($code),
+					'value'   => $code,
 					'compare' => '=',
 				)
 			)
@@ -389,11 +461,10 @@ function all_in_one_invite_code_woo_payment_complete($order_id)
 
 
 		// Get the invite code id
-		if ($query->have_posts()) {
-			while ($query->have_posts()) : $query->the_post();
-				$podt_id = get_the_ID();
-			endwhile;
+		if (!$query->have_posts()) {
+			return;
 		}
+		$podt_id = $query->posts[count($query->posts) - 1]->ID;
 
 		// get the invite code options
 		$all_in_one_invite_codes_options = get_post_meta($podt_id, 'all_in_one_invite_codes_options', true);
@@ -506,8 +577,8 @@ function wc_fs_is_parent_active()
 
 	foreach ($active_plugins as $basename) {
 		if (
-			0 === strpos($basename, 'all-in-one-invite-codes/') ||
-			0 === strpos($basename, 'all-in-one-invite-codes-premium/')
+			0 === strpos(strtolower($basename), 'all-in-one-invite-codes/') ||
+			0 === strpos(strtolower($basename), 'all-in-one-invite-codes-premium/')
 		) {
 			return true;
 		}
