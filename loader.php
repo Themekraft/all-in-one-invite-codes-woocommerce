@@ -391,42 +391,8 @@ function all_in_one_invite_codes_checkout_field_update_order_meta($order_id)
 add_filter('woocommerce_email_order_meta_keys', 'all_in_one_invite_codes_order_mail_meta_keys');
 function all_in_one_invite_codes_order_mail_meta_keys($keys)
 {
-
-
-	if (!is_checkout()) {
-		return;
-	}
-
-	$products = new WP_Query(array(
-		'post_type'      => array('product'),
-		'post_status'    => 'publish',
-		'posts_per_page' => -1,
-		'meta_query'     => array(
-			array(
-				'key' => 'invite_only',
-			)
-		),
-	));
-
-	if ($products->have_posts()) : while ($products->have_posts()) :
-			$products->the_post();
-			$product_ids[] = $products->post->ID;
-		endwhile;
-		wp_reset_postdata();
-	endif;
-
-	$invite_only_in_cart = false;
-	if ($product_ids) {
-		foreach ($product_ids as $product_id) {
-			if (all_in_one_invite_is_conditional_product_in_cart($product_id)) {
-				$invite_only_in_cart = true;
-			}
-		}
-	}
-
-	if ($invite_only_in_cart === true) {
-		$keys['Invite Code'] = 'all_in_one_invite_codes_woo_product';
-	}
+	// WooCommerce reads the value from the order and skips orders without it.
+	$keys['Invite Code'] = 'all_in_one_invite_codes_woo_product';
 
 	return $keys;
 }
