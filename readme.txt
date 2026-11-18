@@ -3,7 +3,7 @@ Contributors: svenl77, gfirem, vmarin
 Tags: registration, invite only, invite codes,
 Requires at least: 4.9
 Tested up to: 7.1
-Requires PHP: 5.3
+Requires PHP: 7.4
 Stable tag: 1.0.5
 License: GPL 3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
