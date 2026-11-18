@@ -4,7 +4,7 @@ Tags: registration, invite only, invite codes,
 Requires at least: 4.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.5
+Stable tag: 1.0.6
 License: GPL 3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -15,6 +15,10 @@ Create invite only products
 Use Invite Codes in your Checkout
 
 == Changelog ==
+= 1.0.6 - 18 Nov 2026 =
+* All in One Invite Codes and WooCommerce are now declared as required plugins. Without All in One Invite Codes the add-on shows a notice and stays inactive, instead of causing a fatal error at registration or checkout.
+* Requires PHP 7.4.
+
 = 1.0.5 - 05 Oct 2026 =
 * Compatible with WooCommerce High-Performance Order Storage (HPOS): the invite code entered at checkout is stored with the order.
 * Fixed: completing an order no longer clears the invite code saved on the customer.

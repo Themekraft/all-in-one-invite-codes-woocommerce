@@ -4,7 +4,7 @@
  * Plugin Name: All in One Invite Codes WooCommerce
  * Plugin URI: https://themekraft.com/products/all-in-one-invite-codes-woocommerce/
  * Description: Create Invite only Products with WooCommerce
- * Version: 1.0.5
+ * Version: 1.0.6
  * Requires PHP: 7.4
  * Requires Plugins: all-in-one-invite-codes, woocommerce
  * Author: ThemeKraft
