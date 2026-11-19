@@ -773,7 +773,8 @@ function all_in_one_invite_code_woo_payment_complete($order_id)
 
 
 	$order = wc_get_order($order_id);
-	if (!$order) {
+	// An order can be completed more than once (status changed back and forth).
+	if (!$order || $order->get_meta('_aioic_invite_codes_rewarded')) {
 		return;
 	}
 	$user = $order->get_user();
@@ -809,6 +810,14 @@ function all_in_one_invite_code_woo_payment_complete($order_id)
 
 		// get the invite code options
 		$all_in_one_invite_codes_options = get_post_meta($podt_id, 'all_in_one_invite_codes_options', true);
+
+		$order->update_meta_data('_aioic_invite_codes_rewarded', time());
+		$order->save();
+
+		// For multiple use codes generate_codes holds the uses left, not codes to hand out.
+		if (isset($all_in_one_invite_codes_options['multiple_use'])) {
+			return;
+		}
 
 		// Check if and how many new invite code should get created.
 		if (isset($all_in_one_invite_codes_options['generate_codes']) && $all_in_one_invite_codes_options['generate_codes'] > 0) {
