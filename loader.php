@@ -128,6 +128,13 @@ function aioic_woocommerce_purchase_complete($order_id)
 {
 
 	$order = wc_get_order($order_id);
+	// Create the purchased codes once per order, for the customer who placed it.
+	if (!$order || $order->get_meta('_aioic_purchased_codes_created')) {
+		return;
+	}
+	$order->update_meta_data('_aioic_purchased_codes_created', time());
+	$order->save();
+
 	// Get and Loop Over Order Items
 	foreach ($order->get_items() as $item_id => $item) {
 		$product_id = $item->get_product_id();
@@ -137,7 +144,7 @@ function aioic_woocommerce_purchase_complete($order_id)
 
 			if ($is_sell_invite_code == 'on') {
 				$generate_invite_code = get_post_meta($product_id, 'invites_codes_amount', true);
-				$user_id = get_current_user_id();
+				$user_id = $order->get_customer_id();
 				$args        = array(
 					'post_type'   => 'tk_invite_codes',
 					'post_author' => $user_id,
@@ -168,38 +175,7 @@ function aioic_woocommerce_purchase_complete($order_id)
 			}
 		}
 	}
-	$order_meta =  $order->get_meta_data();
-	$invite_code = false;
-	foreach ($order_meta as $index => $value) {
-
-		$current_data = $value->get_data();
-		if (isset($current_data['key']) && $current_data['key'] == "all_in_one_invite_codes_woo_product") {
-
-			$invite_code =  isset($current_data['value']) ? $current_data['value'] : false;
-			break;
-		}
-	}
-	if ($invite_code) {
-		// Get all invite codes with this code. Should only be one post.
-		$args  = array(
-			'post_type'  => 'tk_invite_codes',
-			'meta_query' => array(
-				array(
-					'key'     => 'tk_all_in_one_invite_code',
-					'value'   => $invite_code,
-					'compare' => '=',
-				)
-			)
-		);
-		$query = new WP_Query($args);
-		// If have posts means we have a valid code.
-		if ($query->have_posts()) {
-
-			$post_id = $query->get_posts()[0]->ID;
-
-			update_post_meta($post_id, 'tk_all_in_one_invite_code_status', 'Used');
-		}
-	}
+	// The invite code used for the order is used up when the order is placed (aioic_woocommerce_consume_invite_code).
 }
 
 function saveProductOptionsFields($post_id, $post)
@@ -962,7 +938,9 @@ function wc_fs_init()
 			add_filter('woocommerce_product_data_tabs', 'addInviteCodeSection', 10, 1); // Add section
 			add_action('woocommerce_product_data_panels', 'addInviteCodeTabContent'); // Add Section Tab content
 			add_action('woocommerce_process_product_meta', 'saveProductOptionsFields', 12, 2); // Save option
-			add_action('woocommerce_thankyou',  'aioic_woocommerce_purchase_complete');
+			// Paid orders only: processing (paid, or accepted cash on delivery) or completed.
+			add_action('woocommerce_order_status_processing', 'aioic_woocommerce_purchase_complete');
+			add_action('woocommerce_order_status_completed', 'aioic_woocommerce_purchase_complete');
 		}
 
 	} else {
