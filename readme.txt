@@ -1,18 +1,18 @@
-=== All in One Invite Codes WooCommerce===
+=== All in One Invite Codes WooCommerce ===
 Contributors: svenl77, gfirem, vmarin
-Tags: registration, invite only, invite codes,
+Tags: registration, invite only, invite codes
 Requires at least: 4.9
 Tested up to: 7.1
 Requires PHP: 7.4
 Stable tag: 1.0.6
-License: GPL 3
-License URI: http://www.gnu.org/licenses/gpl-3.0.html
+License: GPLv2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 Create invite only products
 
 == Description ==
 
-Use Invite Codes in your Checkout
+Use invite codes in your WooCommerce checkout. Make products invite only, so customers need a valid invite code to buy them, create new invite codes when a product is purchased, and add an invite code field to the WooCommerce registration form.
 
 == Changelog ==
 = 1.0.6 - 18 Nov 2026 =
