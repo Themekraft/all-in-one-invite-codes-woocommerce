@@ -336,47 +336,68 @@ function all_in_one_invite_codes_edit_woo_form() {
 	}
 }
 
+/**
+ * Whether the WooCommerce registration asks for an invite code (General Settings).
+ *
+ * @return bool
+ */
+function aioic_woocommerce_registration_enabled()
+{
+	$general_settings = get_option( 'all_in_one_invite_codes_general' );
+
+	return is_array( $general_settings ) && isset( $general_settings['woo_registration'] ) && 'enabled' === $general_settings['woo_registration'];
+}
+
+/**
+ * Read the invite code posted with the WooCommerce registration form.
+ *
+ * @return string
+ */
+function aioic_woocommerce_posted_registration_code()
+{
+	// WooCommerce verified the registration nonce before these hooks.
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing
+	return isset( $_POST['invite_code'] ) ? sanitize_key( wp_unslash( $_POST['invite_code'] ) ) : '';
+}
+
 add_action('woocommerce_register_post', 'all_in_one_invite_codes_woo_validate_invite_field', 10, 3);
 function all_in_one_invite_codes_woo_validate_invite_field( $username, $email, $validation_errors ) {
-    if ( isset( $_POST['invite_code'] ) && empty( $_POST['invite_code'] ) ) {
-        $validation_errors->add( 'invite_code_error', __( '<strong>Error</strong>: Invite code is required!', 'all-in-one-invite-codes-woocommerce' ) );
-    }
-
-	$is_valid_code = all_in_one_invite_codes_validate_code( $_POST['invite_code'], $_POST['email'], 'any' );
-
-	if( is_array( $is_valid_code ) && isset( $is_valid_code['error'] ) ){
-		$validation_errors->add( 'invite_code_error', __( $is_valid_code['error'], 'all-in-one-invite-codes-woocommerce' ) );
+	// Only when the setting adds the field to the registration form.
+	if ( ! aioic_woocommerce_registration_enabled() ) {
+		return $validation_errors;
 	}
 
-    return $validation_errors;
+	$code = aioic_woocommerce_posted_registration_code();
+	if ( '' === $code ) {
+		$validation_errors->add( 'invite_code_error', __( '<strong>Error</strong>: Invite code is required!', 'all-in-one-invite-codes-woocommerce' ) );
+
+		return $validation_errors;
+	}
+
+	$is_valid_code = all_in_one_invite_codes_validate_code( $code, $email, 'any' );
+
+	if( is_array( $is_valid_code ) && isset( $is_valid_code['error'] ) ){
+		$validation_errors->add( 'invite_code_error', $is_valid_code['error'] );
+	}
+
+	return $validation_errors;
 }
 
 add_action('woocommerce_created_customer', 'all_in_one_invite_update_code_woo_registration_form', 10, 3);
 function all_in_one_invite_update_code_woo_registration_form( $customer_id, $new_customer_data, $password_generated  ){
-	
-	if( isset( $_POST['invite_code'] ) ){
-		$args  = array(
-			'post_type'  => 'tk_invite_codes',
-			'meta_query' => array(
-				array(
-					'key'     => 'tk_all_in_one_invite_code',
-					'value'   => $_POST['invite_code'],
-					'compare' => '=',
-				),
-			),
-		);
-		$query = new WP_Query( $args );
-	
-		// Get the invite code id
-		if ( $query->have_posts() ) {
-			while ( $query->have_posts() ) :
-				$query->the_post();
-				$post_parent_post_id = get_the_ID();
-			endwhile;
-		}
-		update_post_meta( $post_parent_post_id, 'tk_all_in_one_invite_code_status', 'Used' );
+	if ( ! aioic_woocommerce_registration_enabled() ) {
+		return;
 	}
 
+	$code    = aioic_woocommerce_posted_registration_code();
+	$code_id = '' === $code ? 0 : aioic_woocommerce_get_code_id( $code );
+	if ( ! $code_id ) {
+		return;
+	}
+
+	// Keep the code on the customer, like the other registration forms do.
+	update_user_meta( $customer_id, 'tk_all_in_one_invite_code', $code );
+	aioic_woocommerce_use_code( $code_id );
 }
 
 /**
@@ -742,6 +763,18 @@ function aioic_woocommerce_consume_invite_code($order)
 		return;
 	}
 
+	aioic_woocommerce_use_code($code_id);
+
+	$order->update_meta_data('_aioic_invite_code_consumed', $code_id);
+	$order->save();
+}
+/**
+ * Use up an invite code: single use codes become Used, multiple use codes lose one use.
+ *
+ * @param int $code_id Invite code post id.
+ */
+function aioic_woocommerce_use_code($code_id)
+{
 	$options = get_post_meta($code_id, 'all_in_one_invite_codes_options', true);
 	if (is_array($options) && isset($options['multiple_use'])) {
 		$left                      = max(0, (isset($options['generate_codes']) ? (int) $options['generate_codes'] : 0) - 1);
@@ -753,10 +786,8 @@ function aioic_woocommerce_consume_invite_code($order)
 	} else {
 		update_post_meta($code_id, 'tk_all_in_one_invite_code_status', 'Used');
 	}
-
-	$order->update_meta_data('_aioic_invite_code_consumed', $code_id);
-	$order->save();
 }
+
 add_action('woocommerce_checkout_order_processed', 'aioic_woocommerce_consume_invite_code', 20, 1);
 add_action('woocommerce_store_api_checkout_order_processed', 'aioic_woocommerce_consume_invite_code', 20, 1);
 
