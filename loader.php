@@ -9,7 +9,8 @@
  * Requires Plugins: all-in-one-invite-codes, woocommerce
  * Author: ThemeKraft
  * Author URI: https://themekraft.com/
- * License: GPLv3
+ * License: GPLv2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * WC tested up to: 11.1
  * Text Domain: all-in-one-invite-codes-woocommerce
  * Domain Path: /languages
