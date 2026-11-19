@@ -113,6 +113,7 @@ if ( ! aioic_woocommerce_parent_is_active() ) {
 
 function aioic_woocommerce_load_plugin_textdomain()
 {
+	// phpcs:ignore PluginCheck.CodeAnalysis.DiscouragedFunctions.load_plugin_textdomainFound -- Kept on purpose: premium copies and builds not hosted on wordpress.org load their own translations from /languages.
 	load_plugin_textdomain('all-in-one-invite-codes-woocommerce', false, basename(dirname(__FILE__)) . '/languages');
 }
 add_action('init', 'aioic_woocommerce_load_plugin_textdomain');
