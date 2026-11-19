@@ -134,7 +134,7 @@ function aioic_woocommerce_purchase_complete($order_id)
 		$quantity = $item->get_quantity();
 		$is_sell_invite_code = get_post_meta($product_id, 'sell_invite_code', true);
 		for ($i = 0; $i < $quantity; $i++) {
-			
+
 			if ($is_sell_invite_code == 'on') {
 				$generate_invite_code = get_post_meta($product_id, 'invites_codes_amount', true);
 				$user_id = get_current_user_id();
@@ -301,21 +301,7 @@ add_action('woocommerce_after_order_notes', 'all_in_one_invite_codes_checkout_fi
 
 function all_in_one_invite_codes_checkout_field($checkout)
 {
-	global $woocommerce;
-	$invite_only_in_cart = false;
-	foreach ($woocommerce->cart->get_cart() as $cart_item_key => $values) {
-		$_product = $values['data'];
-
-		if ($_product->get_id()) {
-			$result = get_post_meta($_product->get_id(), 'invite_code', true);
-			if ($result == 'on') {
-				$invite_only_in_cart = true;
-				break;
-			}
-		}
-	}
-
-	if ($invite_only_in_cart === true) {
+	if (aioic_woocommerce_cart_needs_invite_code()) {
 		echo '<div id="all_in_one_invite_code"><h3>' . __('Invite Only Product', 'all-in-one-invite-codes-woocommerce') . '</h3><p style="margin: 0 0 8px;">' . __('Please add your invite code here', 'all-in-one-invite-codes-woocommerce') . '!</p>';
 
 
@@ -471,24 +457,332 @@ function all_in_one_invite_codes_order_mail_meta_keys($keys)
 add_action('woocommerce_checkout_process', 'all_in_one_invite_codes_woo_checkout_validation');
 function all_in_one_invite_codes_woo_checkout_validation()
 {
+	if (!aioic_woocommerce_cart_needs_invite_code()) {
+		return;
+	}
 
-	// you can add any custom validations here
-	if (isset($_POST['all_in_one_invite_codes_woo_product'])) {
+	// WooCommerce verified the checkout nonce before this action.
+	// phpcs:disable WordPress.Security.NonceVerification.Missing
+	$code  = isset($_POST['all_in_one_invite_codes_woo_product']) ? sanitize_key(wp_unslash($_POST['all_in_one_invite_codes_woo_product'])) : '';
+	$email = isset($_POST['billing_email']) ? sanitize_email(wp_unslash($_POST['billing_email'])) : '';
+	// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-
-		if (!empty($_POST['all_in_one_invite_codes_woo_product'])) {
-
-			$result = all_in_one_invite_codes_validate_code($_POST['all_in_one_invite_codes_woo_product'], $_POST['billing_email'], 'woocommerce_checkout');
-
-			if (isset($result['error'])) {
-				wc_add_notice($result['error'], 'error');
-			}
-		} else {
-
-			wc_add_notice(__('This Product needs an invitation. Please enter a valid invite code!', 'all-in-one-invite-codes-woocommerce'), 'error');
-		}
+	$result = aioic_woocommerce_check_invite_code($code, $email);
+	if (true !== $result) {
+		wc_add_notice($result, 'error');
 	}
 }
+
+/**
+ * Whether a product (or its parent product) is set as invite only.
+ *
+ * @param int $product_id Product or variation id.
+ *
+ * @return bool
+ */
+function aioic_woocommerce_is_invite_only_product($product_id)
+{
+	return $product_id > 0 && 'on' === get_post_meta($product_id, 'invite_code', true);
+}
+
+/**
+ * Whether the cart holds at least one invite only product.
+ *
+ * Checks the parent product as well, because the setting is saved on the parent
+ * of a variable product.
+ *
+ * @param WC_Cart|null $cart Cart, defaults to the current one.
+ *
+ * @return bool
+ */
+function aioic_woocommerce_cart_needs_invite_code($cart = null)
+{
+	if (null === $cart && function_exists('WC')) {
+		$cart = WC()->cart;
+	}
+	if (!$cart instanceof WC_Cart) {
+		return false;
+	}
+
+	foreach ($cart->get_cart() as $item) {
+		$product_id   = isset($item['product_id']) ? (int) $item['product_id'] : 0;
+		$variation_id = isset($item['variation_id']) ? (int) $item['variation_id'] : 0;
+		if (aioic_woocommerce_is_invite_only_product($product_id) || aioic_woocommerce_is_invite_only_product($variation_id)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Whether an order holds at least one invite only product.
+ *
+ * @param WC_Order $order Order.
+ *
+ * @return bool
+ */
+function aioic_woocommerce_order_needs_invite_code($order)
+{
+	foreach ($order->get_items() as $item) {
+		if (!$item instanceof WC_Order_Item_Product) {
+			continue;
+		}
+		if (aioic_woocommerce_is_invite_only_product((int) $item->get_product_id()) || aioic_woocommerce_is_invite_only_product((int) $item->get_variation_id())) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Check the invite code entered for invite only products.
+ *
+ * @param string $code  Invite code.
+ * @param string $email Billing email.
+ *
+ * @return true|string True when the code can be used, the error message otherwise.
+ */
+function aioic_woocommerce_check_invite_code($code, $email)
+{
+	$code = sanitize_key($code);
+	if ('' === $code) {
+		return __('This Product needs an invitation. Please enter a valid invite code!', 'all-in-one-invite-codes-woocommerce');
+	}
+
+	$result = all_in_one_invite_codes_validate_code($code, $email, 'woocommerce_checkout');
+	if (is_array($result) && isset($result['error'])) {
+		return $result['error'];
+	}
+
+	return true;
+}
+
+/**
+ * Product ids the block checkout uses to show the invite code field: invite only
+ * products and their variations.
+ *
+ * @return int[]
+ */
+function aioic_woocommerce_invite_only_product_ids()
+{
+	$ids = get_transient('aioic_woocommerce_invite_only_ids');
+	if (is_array($ids)) {
+		return $ids;
+	}
+
+	$ids = get_posts(array(
+		'post_type'      => 'product',
+		'post_status'    => 'any',
+		'posts_per_page' => -1,
+		'fields'         => 'ids',
+		'no_found_rows'  => true,
+		// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key, WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- cached in a transient.
+		'meta_key'       => 'invite_code',
+		'meta_value'     => 'on',
+	));
+	if ($ids) {
+		$ids = array_merge($ids, get_posts(array(
+			'post_type'       => 'product_variation',
+			'post_status'     => 'any',
+			'posts_per_page'  => -1,
+			'fields'          => 'ids',
+			'no_found_rows'   => true,
+			'post_parent__in' => $ids,
+		)));
+	}
+	$ids = array_values(array_unique(array_map('intval', $ids)));
+
+	set_transient('aioic_woocommerce_invite_only_ids', $ids, HOUR_IN_SECONDS);
+
+	return $ids;
+}
+
+/**
+ * Forget the cached invite only product ids when a product changes.
+ */
+function aioic_woocommerce_flush_invite_only_product_ids()
+{
+	delete_transient('aioic_woocommerce_invite_only_ids');
+}
+add_action('woocommerce_update_product', 'aioic_woocommerce_flush_invite_only_product_ids');
+add_action('woocommerce_new_product', 'aioic_woocommerce_flush_invite_only_product_ids');
+add_action('woocommerce_new_product_variation', 'aioic_woocommerce_flush_invite_only_product_ids');
+add_action('woocommerce_delete_product_variation', 'aioic_woocommerce_flush_invite_only_product_ids');
+add_action('woocommerce_process_product_meta', 'aioic_woocommerce_flush_invite_only_product_ids', 20);
+
+/**
+ * Forget the cached invite only product ids when the setting changes outside the product editor.
+ *
+ * @param int    $meta_id  Meta id.
+ * @param int    $post_id  Post id.
+ * @param string $meta_key Meta key.
+ */
+function aioic_woocommerce_flush_invite_only_ids_on_meta($meta_id, $post_id, $meta_key)
+{
+	if ('invite_code' === $meta_key) {
+		aioic_woocommerce_flush_invite_only_product_ids();
+	}
+}
+add_action('added_post_meta', 'aioic_woocommerce_flush_invite_only_ids_on_meta', 10, 3);
+add_action('updated_post_meta', 'aioic_woocommerce_flush_invite_only_ids_on_meta', 10, 3);
+add_action('deleted_post_meta', 'aioic_woocommerce_flush_invite_only_ids_on_meta', 10, 3);
+
+/**
+ * Add the invite code field to the block checkout. It is shown and required only
+ * when the cart holds an invite only product (WooCommerce versions with
+ * conditional fields); the order is checked on the server either way.
+ */
+function aioic_woocommerce_register_block_checkout_field()
+{
+	if (!function_exists('woocommerce_register_additional_checkout_field')) {
+		return;
+	}
+
+	$args = array(
+		'id'                => 'aioic/invite-code',
+		'label'             => __('Invite Code', 'all-in-one-invite-codes-woocommerce'),
+		'optionalLabel'     => __('Invite Code (only needed for invite only products)', 'all-in-one-invite-codes-woocommerce'),
+		'location'          => 'order',
+		'type'              => 'text',
+		'required'          => false,
+		'sanitize_callback' => 'aioic_woocommerce_sanitize_block_invite_code',
+	);
+
+	if (class_exists('\Automattic\WooCommerce\Blocks\Domain\Services\CheckoutFieldsSchema\Validation')) {
+		$ids = aioic_woocommerce_invite_only_product_ids();
+		if (!$ids) {
+			// No invite only product: nothing to ask for.
+			return;
+		}
+		$in_cart          = array('contains' => array('enum' => $ids));
+		$args['required'] = array(
+			'type'       => 'object',
+			'properties' => array(
+				'cart' => array('properties' => array('items' => $in_cart)),
+			),
+		);
+		$args['hidden']   = array(
+			'type'       => 'object',
+			'properties' => array(
+				'cart' => array('properties' => array('items' => array('not' => $in_cart))),
+			),
+		);
+	}
+
+	try {
+		woocommerce_register_additional_checkout_field($args);
+	} catch (\Throwable $e) {
+		// The server side check below still protects the order.
+		return;
+	}
+}
+add_action('woocommerce_init', 'aioic_woocommerce_register_block_checkout_field');
+
+/**
+ * Sanitize the block checkout invite code.
+ *
+ * @param mixed $value Field value.
+ *
+ * @return string
+ */
+function aioic_woocommerce_sanitize_block_invite_code($value)
+{
+	return sanitize_key((string) $value);
+}
+
+/**
+ * Check invite only products on the block checkout (Store API), whatever the
+ * request contains, and keep the code on the order like the classic checkout does.
+ *
+ * @param WC_Order        $order   Order being placed.
+ * @param WP_REST_Request $request Store API request.
+ *
+ * @throws \Automattic\WooCommerce\StoreApi\Exceptions\RouteException When the code is missing or cannot be used.
+ */
+function aioic_woocommerce_store_api_validate_invite_code($order, $request)
+{
+	// The checkout block also sends PUT requests while the customer types; only placing the order counts.
+	if ('POST' !== $request->get_method() || !aioic_woocommerce_order_needs_invite_code($order)) {
+		return;
+	}
+
+	$fields = $request->get_param('additional_fields');
+	$code   = is_array($fields) && isset($fields['aioic/invite-code']) ? sanitize_key((string) $fields['aioic/invite-code']) : '';
+
+	$result = aioic_woocommerce_check_invite_code($code, $order->get_billing_email());
+	if (true !== $result) {
+		throw new \Automattic\WooCommerce\StoreApi\Exceptions\RouteException('aioic_invite_code_invalid', esc_html(wp_strip_all_tags($result)), 400);
+	}
+
+	$order->update_meta_data('all_in_one_invite_codes_woo_product', $code);
+}
+add_action('woocommerce_store_api_checkout_update_order_from_request', 'aioic_woocommerce_store_api_validate_invite_code', 10, 2);
+
+/**
+ * Look up an invite code post id.
+ *
+ * @param string $code Invite code.
+ *
+ * @return int
+ */
+function aioic_woocommerce_get_code_id($code)
+{
+	$ids = get_posts(array(
+		'post_type'      => 'tk_invite_codes',
+		'post_status'    => 'any',
+		'posts_per_page' => 1,
+		'fields'         => 'ids',
+		'no_found_rows'  => true,
+		// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- codes are looked up by their meta value.
+		'meta_query'     => array(
+			array(
+				'key'   => 'tk_all_in_one_invite_code',
+				'value' => $code,
+			),
+		),
+	));
+
+	return $ids ? (int) $ids[0] : 0;
+}
+
+/**
+ * Use up the invite code of an order with invite only products when the order is
+ * placed: single use codes become Used, multiple use codes lose one use.
+ *
+ * @param WC_Order|int $order Order or order id.
+ */
+function aioic_woocommerce_consume_invite_code($order)
+{
+	$order = $order instanceof WC_Order ? $order : wc_get_order($order);
+	if (!$order || $order->get_meta('_aioic_invite_code_consumed') || !aioic_woocommerce_order_needs_invite_code($order)) {
+		return;
+	}
+
+	$code    = sanitize_key((string) $order->get_meta('all_in_one_invite_codes_woo_product'));
+	$code_id = '' === $code ? 0 : aioic_woocommerce_get_code_id($code);
+	if (!$code_id) {
+		return;
+	}
+
+	$options = get_post_meta($code_id, 'all_in_one_invite_codes_options', true);
+	if (is_array($options) && isset($options['multiple_use'])) {
+		$left                      = max(0, (isset($options['generate_codes']) ? (int) $options['generate_codes'] : 0) - 1);
+		$options['generate_codes'] = $left;
+		update_post_meta($code_id, 'all_in_one_invite_codes_options', $options);
+		if (0 === $left) {
+			update_post_meta($code_id, 'tk_all_in_one_invite_code_status', 'Used');
+		}
+	} else {
+		update_post_meta($code_id, 'tk_all_in_one_invite_code_status', 'Used');
+	}
+
+	$order->update_meta_data('_aioic_invite_code_consumed', $code_id);
+	$order->save();
+}
+add_action('woocommerce_checkout_order_processed', 'aioic_woocommerce_consume_invite_code', 20, 1);
+add_action('woocommerce_store_api_checkout_order_processed', 'aioic_woocommerce_consume_invite_code', 20, 1);
 
 
 /**
