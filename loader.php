@@ -9,8 +9,7 @@
  * Requires Plugins: all-in-one-invite-codes, woocommerce
  * Author: ThemeKraft
  * Author URI: https://themekraft.com/
- * Licence: GPLv3
- * Network: false
+ * License: GPLv3
  * WC tested up to: 11.1
  * Text Domain: all-in-one-invite-codes-woocommerce
  * Domain Path: /languages
@@ -114,6 +113,7 @@ if ( ! aioic_woocommerce_parent_is_active() ) {
 
 function aioic_woocommerce_load_plugin_textdomain()
 {
+	// phpcs:ignore PluginCheck.CodeAnalysis.DiscouragedFunctions.load_plugin_textdomainFound -- Kept on purpose: premium copies and builds not hosted on wordpress.org load their own translations from /languages.
 	load_plugin_textdomain('all-in-one-invite-codes-woocommerce', false, basename(dirname(__FILE__)) . '/languages');
 }
 add_action('init', 'aioic_woocommerce_load_plugin_textdomain');
@@ -121,7 +121,7 @@ add_action('admin_enqueue_scripts', 'aioic_woocommerce_admin_scripts', 100, 1);
 
 function aioic_woocommerce_admin_scripts()
 {
-	wp_enqueue_script('aioic_woocommerce_admin',  plugins_url('/', __FILE__) . 'assets/js/aioic_woocommerce.js', array('jquery'), false, true);
+	wp_enqueue_script('aioic_woocommerce_admin',  plugins_url('/', __FILE__) . 'assets/js/aioic_woocommerce.js', array('jquery'), filemtime(plugin_dir_path(__FILE__) . 'assets/js/aioic_woocommerce.js'), true);
 }
 
 function aioic_woocommerce_purchase_complete($order_id)
@@ -212,21 +212,21 @@ function saveProductOptionsFields($post_id, $post)
 	}
 	$type = $product->get_type();
 
-	$invite_only = isset($_POST['invite_only']) ? $_POST['invite_only'] : false;
+	$invite_only = isset($_POST['invite_only']) ? sanitize_text_field(wp_unslash($_POST['invite_only'])) : false; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified by WooCommerce before woocommerce_process_product_meta.
 	if ($invite_only) {
 		update_post_meta($post_id, 'invite_code', $invite_only);
 	} else {
 		delete_post_meta($post_id, 'invite_code');
 	}
 
-	$sell_invite = isset($_POST['sell_invite_code']) ? $_POST['sell_invite_code'] : false;
+	$sell_invite = isset($_POST['sell_invite_code']) ? sanitize_text_field(wp_unslash($_POST['sell_invite_code'])) : false; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified by WooCommerce before woocommerce_process_product_meta.
 	if ($sell_invite) {
 		update_post_meta($post_id, 'sell_invite_code', $sell_invite);
 	} else {
 		delete_post_meta($post_id, 'sell_invite_code');
 	}
 
-	$aioic_generate_invites = isset($_POST['invites_codes_amount']) ? $_POST['invites_codes_amount'] : false;
+	$aioic_generate_invites = isset($_POST['invites_codes_amount']) ? sanitize_text_field(wp_unslash($_POST['invites_codes_amount'])) : false; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified by WooCommerce before woocommerce_process_product_meta.
 	if ($aioic_generate_invites) {
 		update_post_meta($post_id, 'invites_codes_amount', $aioic_generate_invites);
 	} else {
@@ -241,7 +241,7 @@ function saveProductOptionsFields($post_id, $post)
 function addInviteCodeTabContent()
 {
 
-	$product_id                  = isset($_GET['post']) ? $_GET['post'] : false;
+	$product_id                  = isset($_GET['post']) ? absint(wp_unslash($_GET['post'])) : false; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only post ID of the product being edited, no state change.
 	$is_checked                  = '';
 	$is_sell_invite_code_checked = '';
 	$generate_invite_code_value  = 0;
@@ -265,10 +265,11 @@ function addInviteCodeTabContent()
 
 	echo '<div id="invite-code" class="panel woocommerce_options_panel wc-metaboxes-wrapper">';
 
-	echo '<p class="form-field"><label style="width: 50%">' . __('Make this product invite only ', 'all-in-one-invite-codes-woocommerce') . ' :</label>  <input style="margin-right: 15px;" type="checkbox" name="invite_only"' . $is_checked . ' > <i> ' . __('This will add an invite validation to the checkout', 'all-in-one-invite-codes-woocommerce') . ' </i></p>';
-	echo '<p class="form-field" id="sell_invite_codes"><label style="width: 50%">' . __('Sell Invite Codes', 'all-in-one-invite-codes-woocommerce') . ' :</label>  <input id="aioic_sell_invite_codes_chbx" style="margin-right: 15px;" type="checkbox" name="sell_invite_code"' . $is_sell_invite_code_checked . ' > <i> ' . __('A new Invite Code will be created when this product is purchased', 'all-in-one-invite-codes-woocommerce') . ' </i></p>';
+	// $is_checked, $is_sell_invite_code_checked and $generate_invite_code_visibility are fixed attribute strings set above.
+	echo '<p class="form-field"><label style="width: 50%">' . esc_html__('Make this product invite only ', 'all-in-one-invite-codes-woocommerce') . ' :</label>  <input style="margin-right: 15px;" type="checkbox" name="invite_only"' . $is_checked . ' > <i> ' . esc_html__('This will add an invite validation to the checkout', 'all-in-one-invite-codes-woocommerce') . ' </i></p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed attribute string.
+	echo '<p class="form-field" id="sell_invite_codes"><label style="width: 50%">' . esc_html__('Sell Invite Codes', 'all-in-one-invite-codes-woocommerce') . ' :</label>  <input id="aioic_sell_invite_codes_chbx" style="margin-right: 15px;" type="checkbox" name="sell_invite_code"' . $is_sell_invite_code_checked . ' > <i> ' . esc_html__('A new Invite Code will be created when this product is purchased', 'all-in-one-invite-codes-woocommerce') . ' </i></p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed attribute string.
 
-	echo '<p class="form-field" id="aioic_generate_invite_codes"' . $generate_invite_code_visibility . '><label style="width: 50%">' . __('Invite Codes to Generate', 'all-in-one-invite-codes-woocommerce') . ' :</label>  <input style="width: 25%;;" type="number" name="invites_codes_amount" value="' . $generate_invite_code_value . '" > <i style="padding-left: 10px; display:table;"> ' . __('Amount of Invite Code invitations that will be generated when this product is purchased', 'all-in-one-invite-codes-woocommerce') . ' </i></p>';
+	echo '<p class="form-field" id="aioic_generate_invite_codes"' . $generate_invite_code_visibility . '><label style="width: 50%">' . esc_html__('Invite Codes to Generate', 'all-in-one-invite-codes-woocommerce') . ' :</label>  <input style="width: 25%;;" type="number" name="invites_codes_amount" value="' . esc_attr($generate_invite_code_value) . '" > <i style="padding-left: 10px; display:table;"> ' . esc_html__('Amount of Invite Code invitations that will be generated when this product is purchased', 'all-in-one-invite-codes-woocommerce') . ' </i></p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed attribute string.
 
 	echo '</div>';
 }
@@ -316,13 +317,13 @@ function all_in_one_invite_codes_checkout_field($checkout)
 	}
 
 	if ($invite_only_in_cart === true) {
-		echo '<div id="all_in_one_invite_code"><h3>' . __('Invite Only Product', 'all-in-one-invite-codes-woocommerce') . '</h3><p style="margin: 0 0 8px;">' . __('Please add your invite code here', 'all-in-one-invite-codes-woocommerce') . '!</p>';
+		echo '<div id="all_in_one_invite_code"><h3>' . esc_html__('Invite Only Product', 'all-in-one-invite-codes-woocommerce') . '</h3><p style="margin: 0 0 8px;">' . esc_html__('Please add your invite code here', 'all-in-one-invite-codes-woocommerce') . '!</p>';
 
 
 		woocommerce_form_field('all_in_one_invite_codes_woo_product', array(
 			'type'     => 'text',
 			'class'    => array('inscription-text form-row-wide'),
-			'label'    => __('Invite Code'),
+			'label'    => __('Invite Code', 'all-in-one-invite-codes-woocommerce'),
 			'required' => 'true'
 		), $checkout->get_value('all_in_one_invite_codes_woo_product'));
 
@@ -335,14 +336,14 @@ function all_in_one_invite_codes_woo_registration_form_settings( $options ){
 	?>
 	<tr valign="top">
 		<th scope="row" valign="top">
-			<?php esc_html_e( 'Add Invite code field to WooCommerce registration form', 'all-in-one-invite-codes' ); ?>
+			<?php esc_html_e( 'Add Invite code field to WooCommerce registration form', 'all-in-one-invite-codes-woocommerce' ); ?>
 		</th>
 		<td>
 			<select name="all_in_one_invite_codes_general[woo_registration]" id="all_in_one_invite_codes_general_woo">
 				<?php $selected = (isset( $options['woo_registration'] ) && $options['woo_registration'] === 'disabled') ? 'selected' : '' ; ?>
-				<option value="disabled" <?php echo $selected; ?>>Disable</option>
+				<option value="disabled" <?php echo esc_attr( $selected ); ?>>Disable</option>
 				<?php $selected = (isset( $options['woo_registration'] ) && $options['woo_registration'] === 'enabled') ? 'selected' : '' ; ?>
-				<option value="enabled" <?php echo $selected; ?>>Enable</option>
+				<option value="enabled" <?php echo esc_attr( $selected ); ?>>Enable</option>
         	</select>
 		</td>
 	</tr>
@@ -376,14 +377,17 @@ function all_in_one_invite_codes_edit_woo_form() {
 
 add_action('woocommerce_register_post', 'all_in_one_invite_codes_woo_validate_invite_field', 10, 3);
 function all_in_one_invite_codes_woo_validate_invite_field( $username, $email, $validation_errors ) {
+    // phpcs:disable WordPress.Security.NonceVerification.Missing -- nonce verified by WooCommerce's registration handler before woocommerce_register_post.
     if ( isset( $_POST['invite_code'] ) && empty( $_POST['invite_code'] ) ) {
         $validation_errors->add( 'invite_code_error', __( '<strong>Error</strong>: Invite code is required!', 'all-in-one-invite-codes-woocommerce' ) );
     }
 
-	$is_valid_code = all_in_one_invite_codes_validate_code( $_POST['invite_code'], $_POST['email'], 'any' );
+	$is_valid_code = all_in_one_invite_codes_validate_code( isset( $_POST['invite_code'] ) ? sanitize_text_field( wp_unslash( $_POST['invite_code'] ) ) : null, isset( $_POST['email'] ) ? sanitize_text_field( wp_unslash( $_POST['email'] ) ) : null, 'any' );
+	// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 	if( is_array( $is_valid_code ) && isset( $is_valid_code['error'] ) ){
-		$validation_errors->add( 'invite_code_error', __( $is_valid_code['error'], 'all-in-one-invite-codes-woocommerce' ) );
+		// The message is already translated by All in One Invite Codes.
+		$validation_errors->add( 'invite_code_error', $is_valid_code['error'] );
 	}
 
     return $validation_errors;
@@ -392,17 +396,19 @@ function all_in_one_invite_codes_woo_validate_invite_field( $username, $email, $
 add_action('woocommerce_created_customer', 'all_in_one_invite_update_code_woo_registration_form', 10, 3);
 function all_in_one_invite_update_code_woo_registration_form( $customer_id, $new_customer_data, $password_generated  ){
 	
+	// phpcs:disable WordPress.Security.NonceVerification.Missing -- nonce verified by WooCommerce's registration or checkout handler before the customer is created.
 	if( isset( $_POST['invite_code'] ) ){
 		$args  = array(
 			'post_type'  => 'tk_invite_codes',
 			'meta_query' => array(
 				array(
 					'key'     => 'tk_all_in_one_invite_code',
-					'value'   => $_POST['invite_code'],
+					'value'   => sanitize_text_field( wp_unslash( $_POST['invite_code'] ) ),
 					'compare' => '=',
 				),
 			),
 		);
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
 		$query = new WP_Query( $args );
 	
 		// Get the invite code id
@@ -447,10 +453,11 @@ function all_in_one_invite_is_conditional_product_in_cart($product_id)
 add_action('woocommerce_checkout_update_order_meta', 'all_in_one_invite_codes_checkout_field_update_order_meta');
 function all_in_one_invite_codes_checkout_field_update_order_meta($order_id)
 {
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified by WC_Checkout::process_checkout().
 	if (!empty($_POST['all_in_one_invite_codes_woo_product'])) {
 		$order = wc_get_order($order_id);
 		if ($order) {
-			$order->update_meta_data('all_in_one_invite_codes_woo_product', sanitize_text_field(wp_unslash($_POST['all_in_one_invite_codes_woo_product'])));
+			$order->update_meta_data('all_in_one_invite_codes_woo_product', sanitize_text_field(wp_unslash($_POST['all_in_one_invite_codes_woo_product']))); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- see above.
 			$order->save();
 		}
 	}
@@ -473,12 +480,13 @@ function all_in_one_invite_codes_woo_checkout_validation()
 {
 
 	// you can add any custom validations here
+	// phpcs:disable WordPress.Security.NonceVerification.Missing -- nonce verified by WC_Checkout::process_checkout() before woocommerce_checkout_process.
 	if (isset($_POST['all_in_one_invite_codes_woo_product'])) {
 
 
 		if (!empty($_POST['all_in_one_invite_codes_woo_product'])) {
 
-			$result = all_in_one_invite_codes_validate_code($_POST['all_in_one_invite_codes_woo_product'], $_POST['billing_email'], 'woocommerce_checkout');
+			$result = all_in_one_invite_codes_validate_code(sanitize_text_field(wp_unslash($_POST['all_in_one_invite_codes_woo_product'])), isset($_POST['billing_email']) ? sanitize_text_field(wp_unslash($_POST['billing_email'])) : null, 'woocommerce_checkout');
 
 			if (isset($result['error'])) {
 				wc_add_notice($result['error'], 'error');
@@ -488,6 +496,7 @@ function all_in_one_invite_codes_woo_checkout_validation()
 			wc_add_notice(__('This Product needs an invitation. Please enter a valid invite code!', 'all-in-one-invite-codes-woocommerce'), 'error');
 		}
 	}
+	// phpcs:enable WordPress.Security.NonceVerification.Missing
 }
 
 
@@ -578,7 +587,7 @@ add_filter('all_in_one_invite_codes_options_email_templates', 'all_in_one_invite
 function all_in_one_invite_codes_woocommerce_options_email_templates($options)
 {
 
-	$options['woocommerce_checkout'] = __('WooCommerce Email Template', 'all-in-one-invite-codes');
+	$options['woocommerce_checkout'] = __('WooCommerce Email Template', 'all-in-one-invite-codes-woocommerce');
 
 	return $options;
 }
