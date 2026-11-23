@@ -4,7 +4,7 @@ Tags: registration, invite only, invite codes
 Requires at least: 4.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.6
+Stable tag: 1.0.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,6 +15,13 @@ Create invite only products
 Use invite codes in your WooCommerce checkout. Make products invite only, so customers need a valid invite code to buy them, create new invite codes when a product is purchased, and add an invite code field to the WooCommerce registration form.
 
 == Changelog ==
+= 1.0.7 - 20 Nov 2026 =
+* Security: invite only products now check the invite code on the block checkout and on every classic checkout request, including product variations. The invite code field is now shown on the block checkout.
+* Security: invite codes sold with a product are now created once, when the order is paid, for the customer who bought them.
+* Security: completing an order now hands out new invite codes only once, and never for multiple use codes.
+* Fixed: the invite code used at checkout or registration is now used up when the order is placed, and multiple use codes lose one use instead of becoming Used.
+* Fixed: WooCommerce registration no longer asks for an invite code when "Add Invite code field to WooCommerce registration form" is off.
+
 = 1.0.6 - 18 Nov 2026 =
 * All in One Invite Codes and WooCommerce are now declared as required plugins. Without All in One Invite Codes the add-on shows a notice and stays inactive, instead of causing a fatal error at registration or checkout.
 * Requires PHP 7.4.
