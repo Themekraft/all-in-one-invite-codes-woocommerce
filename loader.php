@@ -178,7 +178,7 @@ function aioic_woocommerce_purchase_complete($order_id)
 	// The invite code used for the order is used up when the order is placed (aioic_woocommerce_consume_invite_code).
 }
 
-function saveProductOptionsFields($post_id, $post)
+function aioic_woocommerce_save_product_options_fields($post_id, $post)
 {
 
 	$product = wc_get_product($post_id);
@@ -214,7 +214,7 @@ function saveProductOptionsFields($post_id, $post)
 /**
  * Add content to generated tab
  */
-function addInviteCodeTabContent()
+function aioic_woocommerce_invite_code_tab_content()
 {
 
 	$product_id                  = isset($_GET['post']) ? $_GET['post'] : false;
@@ -256,7 +256,7 @@ function addInviteCodeTabContent()
  *
  * @return mixed
  */
-function addInviteCodeSection($sections)
+function aioic_woocommerce_invite_code_section($sections)
 {
 
 
@@ -316,14 +316,16 @@ add_action( 'woocommerce_register_form', 'all_in_one_invite_codes_edit_woo_form'
 function all_in_one_invite_codes_add_invite_field_woo() {
 	$general_settings = get_option( 'all_in_one_invite_codes_general' );
 	if( ! empty( $general_settings ) && isset( $general_settings['woo_registration'] ) && 'enabled' === $general_settings['woo_registration'] ){
-		return apply_filters( 'woocommerce_forms_field', array(
+		$fields = apply_filters_deprecated( 'woocommerce_forms_field', array( array(
 			'invite_code' => array(
 				'type'        => 'text',
 				'label'       => __( 'Invite code', 'all-in-one-invite-codes-woocommerce' ),
 				'placeholder' => __( 'Please enter a valid code', 'all-in-one-invite-codes-woocommerce' ),
 				'required'    => true,
 			),
-		) );
+		) ), '1.0.8', 'aioic_woocommerce_forms_field' );
+
+		return apply_filters( 'aioic_woocommerce_forms_field', $fields );
 	}
 }
 function all_in_one_invite_codes_edit_woo_form() {
@@ -975,9 +977,9 @@ function wc_fs_init()
 		do_action('wc_fs_loaded');
 
 		if( wc_fs()->is_plan('professional') || wc_fs()->is_trial() ){
-			add_filter('woocommerce_product_data_tabs', 'addInviteCodeSection', 10, 1); // Add section
-			add_action('woocommerce_product_data_panels', 'addInviteCodeTabContent'); // Add Section Tab content
-			add_action('woocommerce_process_product_meta', 'saveProductOptionsFields', 12, 2); // Save option
+			add_filter('woocommerce_product_data_tabs', 'aioic_woocommerce_invite_code_section', 10, 1); // Add section
+			add_action('woocommerce_product_data_panels', 'aioic_woocommerce_invite_code_tab_content'); // Add Section Tab content
+			add_action('woocommerce_process_product_meta', 'aioic_woocommerce_save_product_options_fields', 12, 2); // Save option
 			// Paid orders only: processing (paid, or accepted cash on delivery) or completed.
 			add_action('woocommerce_order_status_processing', 'aioic_woocommerce_purchase_complete');
 			add_action('woocommerce_order_status_completed', 'aioic_woocommerce_purchase_complete');
